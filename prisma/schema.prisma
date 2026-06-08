@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AgentRole {
+  ADMIN
+  AGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  FRUSTRATED
+  ANGRY
+}
+
+model Agent {
+  id        String    @id @db.Uuid
+  name      String
+  email     String    @unique
+  role      AgentRole @default(AGENT)
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  assignedTickets Ticket[]
+  comments        Comment[]
+  statusChanges   TicketStatusHistory[]
+  editedInsights  AIInsight[]
+
+  @@map("agents")
+}
+
+model Customer {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String   @unique
+  company   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tickets Ticket[]
+
+  @@map("customers")
+}
+
+model Ticket {
+  id          String         @id @default(uuid()) @db.Uuid
+  title       String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+
+  customerId      String  @map("customer_id") @db.Uuid
+  assignedAgentId String? @map("assigned_agent_id") @db.Uuid
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  customer      Customer @relation(fields: [customerId], references: [id])
+  assignedAgent Agent?   @relation(fields: [assignedAgentId], references: [id])
+
+  comments      Comment[]
+  statusHistory TicketStatusHistory[]
+  aiInsights    AIInsight[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([customerId])
+  @@index([assignedAgentId])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([priority, createdAt])
+  @@index([assignedAgentId, status])
+  @@map("tickets")
+}
+
+model Comment {
+  id         String  @id @default(uuid()) @db.Uuid
+  content    String
+  isInternal Boolean @default(true) @map("is_internal")
+
+  ticketId String @map("ticket_id") @db.Uuid
+  agentId  String @map("agent_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  agent  Agent  @relation(fields: [agentId], references: [id])
+
+  @@index([ticketId])
+  @@index([ticketId, createdAt])
+  @@map("comments")
+}
+
+model TicketStatusHistory {
+  id        String       @id @default(uuid()) @db.Uuid
+  oldStatus TicketStatus @map("old_status")
+  newStatus TicketStatus @map("new_status")
+
+  changedByAgentId String @map("changed_by_agent_id") @db.Uuid
+  ticketId         String @map("ticket_id") @db.Uuid
+
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket         Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  changedByAgent Agent  @relation(fields: [changedByAgentId], references: [id])
+
+  @@index([ticketId])
+  @@index([ticketId, createdAt])
+  @@map("ticket_status_history")
+}
+
+model AIInsight {
+  id       String @id @default(uuid()) @db.Uuid
+  ticketId String @map("ticket_id") @db.Uuid
+
+  summary           String
+  suggestedPriority TicketPriority @map("suggested_priority")
+  sentiment         Sentiment
+
+  nextAction      String? @map("next_action")
+  confidenceScore Float   @map("confidence_score")
+
+  isEdited      Boolean @default(false) @map("is_edited")
+  editedSummary String? @map("edited_summary")
+
+  editedByAgentId String?   @map("edited_by_agent_id") @db.Uuid
+  editedAt        DateTime? @map("edited_at")
+
+  isStale Boolean @default(false) @map("is_stale")
+  version Int     @default(1)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket        Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  editedByAgent Agent? @relation(fields: [editedByAgentId], references: [id])
+
+  @@index([ticketId])
+  @@index([isStale])
+  @@index([ticketId, createdAt])
+  @@map("ai_insights")
+}
