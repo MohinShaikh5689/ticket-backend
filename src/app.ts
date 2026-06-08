@@ -39,6 +39,7 @@ export async function buildApp() {
   await fastify.register(cors, {
     origin: [env.FRONTEND_URL],
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   // Swagger (OpenAPI spec) — jsonSchemaTransform converts Zod schemas to JSON Schema
